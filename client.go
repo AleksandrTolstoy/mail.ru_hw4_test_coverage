@@ -89,7 +89,7 @@ func (srv *SearchClient) FindUsers(req SearchRequest) (*SearchResponse, error) {
 
 	searcherReq, err := http.NewRequest("GET", srv.URL+"?"+searcherParams.Encode(), nil)
 	searcherReq.Header.Add("AccessToken", srv.AccessToken)
-	
+
 	resp, err := client.Do(searcherReq)
 	if err != nil {
 		if err, ok := err.(net.Error); ok && err.Timeout() {
@@ -117,7 +117,7 @@ func (srv *SearchClient) FindUsers(req SearchRequest) (*SearchResponse, error) {
 		return nil, fmt.Errorf("unknown bad request error: %s", errResp.Error)
 	}
 
-	data := []User{}
+	data := make([]User, 0)
 	err = json.Unmarshal(body, &data)
 	if err != nil {
 		return nil, fmt.Errorf("cant unpack result json: %s", err)
