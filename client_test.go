@@ -1,24 +1,20 @@
 package main
 
 import (
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 )
 
 var (
-	testServer          = httptest.NewServer(http.HandlerFunc(SearchServer))
-	aviableAccessTokens = []string{"access allowed"}
+	testServer         = httptest.NewServer(http.HandlerFunc(SearchServer))
+	aviableAccessToken = "access allowed"
 )
 
 func SearchServer(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("You accept", r.Header.Get("AccessToken"))
-	for _, token := range aviableAccessTokens {
-		if r.Header.Get("AccessToken") != token { // access denied
-			http.Error(w, "Bad AccessToken", http.StatusUnauthorized)
-			return
-		}
+	if r.Header.Get("AccessToken") != aviableAccessToken {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
 	}
 }
 
@@ -33,7 +29,11 @@ func TestSearchClient_FindUsers_NegativeLimit(t *testing.T) {
 	}
 
 	_, err := client.FindUsers(request)
-	if err == nil {
+	if err != nil {
+		if err.Error() != "limit must be > 0" {
+			t.Fail()
+		}
+	} else {
 		t.Fail()
 	}
 }
@@ -45,11 +45,33 @@ func TestSearchClient_FindUsers_NegativeOffset(t *testing.T) {
 	}
 
 	request := SearchRequest{
-		Limit: -1,
+		Offset: -1,
 	}
 
 	_, err := client.FindUsers(request)
-	if err == nil {
+	if err != nil {
+		if err.Error() != "offset must be > 0" {
+			t.Fail()
+		}
+	} else {
+		t.Fail()
+	}
+}
+
+func TestSearchClient_FindUsers_AccessDenied(t *testing.T) {
+	client := SearchClient{
+		AccessToken: "access denied",
+		URL:         testServer.URL,
+	}
+
+	request := SearchRequest{}
+
+	_, err := client.FindUsers(request)
+	if err != nil {
+		if err.Error() != "Bad AccessToken" {
+			t.Fail()
+		}
+	} else {
 		t.Fail()
 	}
 }
