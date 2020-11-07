@@ -74,6 +74,7 @@ func (srv *SearchClient) FindUsers(req SearchRequest) (*SearchResponse, error) {
 	if req.Limit > 25 {
 		req.Limit = 25
 	}
+
 	if req.Offset < 0 {
 		return nil, fmt.Errorf("offset must be > 0")
 	}
