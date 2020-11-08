@@ -2,13 +2,16 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"encoding/xml"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"sort"
 	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -27,8 +30,96 @@ func SearchServer(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	users := decodeUsers(xmlData)
-	fmt.Println(users)
+	decodedUsers := decodeUsers(xmlData)
+
+	q := r.URL.Query()
+	fmt.Println("Query:", q)
+	limit := q.Get("limit")
+	offset := q.Get("offset")
+	query := q.Get("query")
+	orderField := q.Get("order_field")
+
+	orderBy, err := strconv.Atoi(q.Get("order_by"))
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	fmt.Printf("Params: %v, %v, %v, %v, %v\n", limit, offset, query, orderField, orderBy)
+
+	isOrderAvailable := false
+	for _, order := range []int{OrderByAsc, OrderByAsIs, OrderByDesc} {
+		if orderBy == order {
+			isOrderAvailable = true
+			break
+		}
+	}
+
+	if !isOrderAvailable {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	var result []User
+	if query != "" {
+		result = make([]User, 0)
+		for _, u := range decodedUsers {
+			if strings.Contains(u.Name, query) || strings.Contains(u.About, query) {
+				result = append(result, u)
+			}
+		}
+	} else {
+		result = decodedUsers
+	}
+
+	switch orderField {
+	case "", "Name":
+		if orderBy == OrderByAsIs {
+			break
+		}
+
+		sort.Slice(result, func(i, j int) bool {
+			if orderBy == OrderByAsc {
+				return result[i].Name > result[j].Name
+			}
+
+			return result[i].Name < result[j].Name
+		})
+	case "Id":
+		if orderBy == OrderByAsIs {
+			break
+		}
+
+		sort.Slice(result, func(i, j int) bool {
+			if orderBy == OrderByAsc {
+				return result[i].Id > result[j].Id
+			}
+
+			return result[i].Id < result[j].Id
+		})
+	case "Age":
+		if orderBy == OrderByAsIs {
+			break
+		}
+
+		sort.Slice(result, func(i, j int) bool {
+			if orderBy == OrderByAsc {
+				return result[i].Age > result[j].Age
+			}
+
+			return result[i].Age < result[j].Age
+		})
+	default:
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	resp, err := json.Marshal(result)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.Write(resp)
 }
 
 func decodeUsers(xmlData []byte) []User {
