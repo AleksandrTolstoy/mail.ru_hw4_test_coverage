@@ -51,6 +51,7 @@ func SearchServer(w http.ResponseWriter, r *http.Request) {
 
 	if !isOrderAvailable(orderBy) {
 		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("Unknown order"))
 		return
 	}
 
@@ -273,7 +274,7 @@ func TestSearchClient_FindUsers_BadOrderField(t *testing.T) {
 	}
 }
 
-func TestSearchClient_FindUsers_UnknownBadRequest(t *testing.T) {
+func TestSearchClient_FindUsers_BigOffset(t *testing.T) {
 	request := SearchRequest{
 		Offset:     100500,
 		OrderField: "Id",
@@ -282,6 +283,21 @@ func TestSearchClient_FindUsers_UnknownBadRequest(t *testing.T) {
 	_, err := testSearchClient.FindUsers(request)
 	if err != nil {
 		if err.Error() != "unknown bad request error: no items with this offset" {
+			t.Fail()
+		}
+	} else {
+		t.Fail()
+	}
+}
+
+func TestSearchClient_FindUsers_UnknownOrder(t *testing.T) {
+	request := SearchRequest{
+		OrderBy: 100500,
+	}
+
+	_, err := testSearchClient.FindUsers(request)
+	if err != nil {
+		if err.Error() != "cant unpack error json: invalid character 'U' looking for beginning of value" {
 			t.Fail()
 		}
 	} else {
