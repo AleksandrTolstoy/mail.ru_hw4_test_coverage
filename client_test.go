@@ -15,9 +15,7 @@ import (
 	"testing"
 )
 
-var (
-	testServer = httptest.NewServer(http.HandlerFunc(SearchServer))
-)
+var testServer = httptest.NewServer(http.HandlerFunc(SearchServer))
 
 func SearchServer(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("AccessToken") != "access allowed" {
@@ -46,74 +44,21 @@ func SearchServer(w http.ResponseWriter, r *http.Request) {
 	}
 	fmt.Printf("Params: %v, %v, %v, %v, %v\n", limit, offset, query, orderField, orderBy)
 
-	isOrderAvailable := false
-	for _, order := range []int{OrderByAsc, OrderByAsIs, OrderByDesc} {
-		if orderBy == order {
-			isOrderAvailable = true
-			break
-		}
-	}
-
-	if !isOrderAvailable {
+	if !isOrderAvailable(orderBy) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
-	var result []User
-	if query != "" {
-		result = make([]User, 0)
-		for _, u := range decodedUsers {
-			if strings.Contains(u.Name, query) || strings.Contains(u.About, query) {
-				result = append(result, u)
-			}
+	searchResult := searchUsers(query, decodedUsers)
+	if orderBy != OrderByAsIs {
+		statusCode := sortUsers(orderField, orderBy, searchResult)
+		if statusCode != http.StatusOK {
+			w.WriteHeader(statusCode)
+			return
 		}
-	} else {
-		result = decodedUsers
 	}
 
-	switch orderField {
-	case "", "Name":
-		if orderBy == OrderByAsIs {
-			break
-		}
-
-		sort.Slice(result, func(i, j int) bool {
-			if orderBy == OrderByAsc {
-				return result[i].Name > result[j].Name
-			}
-
-			return result[i].Name < result[j].Name
-		})
-	case "Id":
-		if orderBy == OrderByAsIs {
-			break
-		}
-
-		sort.Slice(result, func(i, j int) bool {
-			if orderBy == OrderByAsc {
-				return result[i].Id > result[j].Id
-			}
-
-			return result[i].Id < result[j].Id
-		})
-	case "Age":
-		if orderBy == OrderByAsIs {
-			break
-		}
-
-		sort.Slice(result, func(i, j int) bool {
-			if orderBy == OrderByAsc {
-				return result[i].Age > result[j].Age
-			}
-
-			return result[i].Age < result[j].Age
-		})
-	default:
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	resp, err := json.Marshal(result)
+	resp, err := json.Marshal(searchResult)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -183,6 +128,64 @@ func decodeUsers(xmlData []byte) []User {
 	return users
 }
 
+func isOrderAvailable(orderBy int) bool {
+	for _, order := range []int{OrderByAsc, OrderByAsIs, OrderByDesc} {
+		if orderBy == order {
+			return true
+		}
+	}
+
+	return false
+}
+
+func searchUsers(query string, decodedUsers []User) []User {
+	if query != "" {
+		result := make([]User, 0)
+		for _, u := range decodedUsers {
+			if strings.Contains(u.Name, query) || strings.Contains(u.About, query) {
+				result = append(result, u)
+			}
+		}
+
+		return result
+	}
+
+	return decodedUsers
+}
+
+func sortUsers(orderField string, orderBy int, users []User) (statusCode int) {
+	switch orderField {
+	case "", "Name":
+		sort.Slice(users, func(i, j int) bool {
+			if orderBy == OrderByAsc {
+				return users[i].Name > users[j].Name
+			}
+
+			return users[i].Name < users[j].Name
+		})
+	case "Id":
+		sort.Slice(users, func(i, j int) bool {
+			if orderBy == OrderByAsc {
+				return users[i].Id > users[j].Id
+			}
+
+			return users[i].Id < users[j].Id
+		})
+	case "Age":
+		sort.Slice(users, func(i, j int) bool {
+			if orderBy == OrderByAsc {
+				return users[i].Age > users[j].Age
+			}
+
+			return users[i].Age < users[j].Age
+		})
+	default:
+		return http.StatusBadRequest
+	}
+
+	return http.StatusOK
+}
+
 func TestSearchClient_FindUsers_NegativeLimit(t *testing.T) {
 	client := SearchClient{
 		AccessToken: "access allowed",
@@ -247,7 +250,13 @@ func TestSearchClient_FindUsers_Normal(t *testing.T) {
 		URL:         testServer.URL,
 	}
 
-	request := SearchRequest{}
+	request := SearchRequest{
+		Limit:      10,
+		Offset:     0,
+		Query:      "ipsum",
+		OrderField: "Id",
+		OrderBy:    OrderByAsc,
+	}
 
 	_, _ = client.FindUsers(request)
 }
