@@ -37,18 +37,17 @@ func SearchServer(w http.ResponseWriter, r *http.Request) {
 	decodedUsers := decodeUsers(xmlData)
 
 	q := r.URL.Query()
-	fmt.Println("Query:", q)
-	limit := q.Get("limit")
-	offset := q.Get("offset")
-	query := q.Get("query")
-	orderField := q.Get("order_field")
 
+	limit, err := strconv.Atoi(q.Get("limit"))
+	offset, err := strconv.Atoi(q.Get("offset"))
 	orderBy, err := strconv.Atoi(q.Get("order_by"))
 	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	fmt.Printf("Params: %v, %v, %v, %v, %v\n", limit, offset, query, orderField, orderBy)
+
+	query := q.Get("query")
+	orderField := q.Get("order_field")
 
 	if !isOrderAvailable(orderBy) {
 		w.WriteHeader(http.StatusBadRequest)
@@ -58,18 +57,21 @@ func SearchServer(w http.ResponseWriter, r *http.Request) {
 	searchResult := searchUsers(query, decodedUsers)
 	statusCode := sortUsers(orderField, orderBy, searchResult)
 
-	if statusCode != http.StatusOK {
+	if statusCode == http.StatusBadRequest {
 		w.WriteHeader(statusCode)
-		errResp, err := json.Marshal(SearchErrorResponse{Error: "ErrorBadOrderField"})
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-
+		errResp, _ := json.Marshal(SearchErrorResponse{Error: "ErrorBadOrderField"})
 		w.Write(errResp)
 		return
 	}
 
+	if offset >= len(searchResult) {
+		w.WriteHeader(http.StatusBadRequest)
+		errResp, _ := json.Marshal(SearchErrorResponse{Error: "no items with this offset"})
+		w.Write(errResp)
+		return
+	}
+
+	searchResult = searchResult[offset : offset+limit]
 	resp, err := json.Marshal(searchResult)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -264,6 +266,22 @@ func TestSearchClient_FindUsers_BadOrderField(t *testing.T) {
 	_, err := testSearchClient.FindUsers(request)
 	if err != nil {
 		if err.Error() != fmt.Sprintf("OrderFeld %s invalid", request.OrderField) {
+			t.Fail()
+		}
+	} else {
+		t.Fail()
+	}
+}
+
+func TestSearchClient_FindUsers_UnknownBadRequest(t *testing.T) {
+	request := SearchRequest{
+		Offset:     100500,
+		OrderField: "Id",
+	}
+
+	_, err := testSearchClient.FindUsers(request)
+	if err != nil {
+		if err.Error() != "unknown bad request error: no items with this offset" {
 			t.Fail()
 		}
 	} else {
