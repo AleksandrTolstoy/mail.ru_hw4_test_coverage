@@ -15,7 +15,13 @@ import (
 	"testing"
 )
 
-var testServer = httptest.NewServer(http.HandlerFunc(SearchServer))
+var (
+	testServer       = httptest.NewServer(http.HandlerFunc(SearchServer))
+	testSearchClient = SearchClient{
+		AccessToken: "access allowed",
+		URL:         testServer.URL,
+	}
+)
 
 func SearchServer(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("AccessToken") != "access allowed" {
@@ -50,12 +56,18 @@ func SearchServer(w http.ResponseWriter, r *http.Request) {
 	}
 
 	searchResult := searchUsers(query, decodedUsers)
-	if orderBy != OrderByAsIs {
-		statusCode := sortUsers(orderField, orderBy, searchResult)
-		if statusCode != http.StatusOK {
-			w.WriteHeader(statusCode)
+	statusCode := sortUsers(orderField, orderBy, searchResult)
+
+	if statusCode != http.StatusOK {
+		w.WriteHeader(statusCode)
+		errResp, err := json.Marshal(SearchErrorResponse{Error: "ErrorBadOrderField"})
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
+
+		w.Write(errResp)
+		return
 	}
 
 	resp, err := json.Marshal(searchResult)
@@ -156,6 +168,10 @@ func searchUsers(query string, decodedUsers []User) []User {
 func sortUsers(orderField string, orderBy int, users []User) (statusCode int) {
 	switch orderField {
 	case "", "Name":
+		if orderBy == OrderByAsIs {
+			break
+		}
+
 		sort.Slice(users, func(i, j int) bool {
 			if orderBy == OrderByAsc {
 				return users[i].Name > users[j].Name
@@ -164,6 +180,10 @@ func sortUsers(orderField string, orderBy int, users []User) (statusCode int) {
 			return users[i].Name < users[j].Name
 		})
 	case "Id":
+		if orderBy == OrderByAsIs {
+			break
+		}
+
 		sort.Slice(users, func(i, j int) bool {
 			if orderBy == OrderByAsc {
 				return users[i].Id > users[j].Id
@@ -172,6 +192,10 @@ func sortUsers(orderField string, orderBy int, users []User) (statusCode int) {
 			return users[i].Id < users[j].Id
 		})
 	case "Age":
+		if orderBy == OrderByAsIs {
+			break
+		}
+
 		sort.Slice(users, func(i, j int) bool {
 			if orderBy == OrderByAsc {
 				return users[i].Age > users[j].Age
@@ -187,16 +211,11 @@ func sortUsers(orderField string, orderBy int, users []User) (statusCode int) {
 }
 
 func TestSearchClient_FindUsers_NegativeLimit(t *testing.T) {
-	client := SearchClient{
-		AccessToken: "access allowed",
-		URL:         testServer.URL,
-	}
-
 	request := SearchRequest{
 		Limit: -1,
 	}
 
-	_, err := client.FindUsers(request)
+	_, err := testSearchClient.FindUsers(request)
 	if err != nil {
 		if err.Error() != "limit must be > 0" {
 			t.Fail()
@@ -207,16 +226,11 @@ func TestSearchClient_FindUsers_NegativeLimit(t *testing.T) {
 }
 
 func TestSearchClient_FindUsers_NegativeOffset(t *testing.T) {
-	client := SearchClient{
-		AccessToken: "access allowed",
-		URL:         testServer.URL,
-	}
-
 	request := SearchRequest{
 		Offset: -1,
 	}
 
-	_, err := client.FindUsers(request)
+	_, err := testSearchClient.FindUsers(request)
 	if err != nil {
 		if err.Error() != "offset must be > 0" {
 			t.Fail()
@@ -227,16 +241,29 @@ func TestSearchClient_FindUsers_NegativeOffset(t *testing.T) {
 }
 
 func TestSearchClient_FindUsers_AccessDenied(t *testing.T) {
-	client := SearchClient{
+	testSearchClient := SearchClient{
 		AccessToken: "access denied",
 		URL:         testServer.URL,
 	}
 
-	request := SearchRequest{}
-
-	_, err := client.FindUsers(request)
+	_, err := testSearchClient.FindUsers(SearchRequest{})
 	if err != nil {
 		if err.Error() != "Bad AccessToken" {
+			t.Fail()
+		}
+	} else {
+		t.Fail()
+	}
+}
+
+func TestSearchClient_FindUsers_BadOrderField(t *testing.T) {
+	request := SearchRequest{
+		OrderField: "Random",
+	}
+
+	_, err := testSearchClient.FindUsers(request)
+	if err != nil {
+		if err.Error() != fmt.Sprintf("OrderFeld %s invalid", request.OrderField) {
 			t.Fail()
 		}
 	} else {
