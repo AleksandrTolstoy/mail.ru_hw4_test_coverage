@@ -161,10 +161,9 @@ func isOrderAvailable(orderBy int) bool {
 
 func searchUsers(query string, limit int, decodedUsers []User) []User {
 	if query != "" {
-		result := make([]User, 0, limit-1)
+		result := make([]User, 0, limit)
 		for _, u := range decodedUsers {
-			// because we increase limit in request
-			if len(result) == limit-1 {
+			if len(result) == limit {
 				return result
 			}
 
@@ -325,6 +324,26 @@ func TestSearchClient_FindUsers_UnknownOrder(t *testing.T) {
 			t.Fail()
 		}
 	} else {
+		t.Fail()
+	}
+}
+
+func TestSearchClient_FindUsers_BigLimit(t *testing.T) {
+	client := SearchClient{
+		AccessToken: "access allowed",
+		URL:         testServer.URL,
+	}
+
+	request := SearchRequest{
+		Limit:      100,
+		Offset:     0,
+		Query:      "a",
+		OrderField: "Id",
+		OrderBy:    OrderByAsc,
+	}
+
+	_, err := client.FindUsers(request)
+	if err != nil {
 		t.Fail()
 	}
 }
