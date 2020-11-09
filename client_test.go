@@ -39,11 +39,11 @@ func SearchServer(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 
 	offset, _ := strconv.Atoi(q.Get("offset"))
+	// special case actually i wouldn't do that in real project
+	// this error needs to be handled in the home work (1)
 	if offset >= 15 && offset <= 24 {
 		q.Set("offset", strconv.Itoa(offset+1))
 		r.URL.RawQuery = q.Encode()
-
-		fmt.Println(r.URL.RequestURI())
 		http.Redirect(w, r, r.URL.RequestURI(), http.StatusTemporaryRedirect)
 		return
 	}
@@ -55,6 +55,8 @@ func SearchServer(w http.ResponseWriter, r *http.Request) {
 
 	if !isOrderAvailable(orderBy) {
 		w.WriteHeader(http.StatusBadRequest)
+		// special case actually i wouldn't do that in real project
+		// this error needs to be handled in the home work (2)
 		w.Write([]byte("Unknown order"))
 		return
 	}
@@ -159,19 +161,17 @@ func isOrderAvailable(orderBy int) bool {
 
 func searchUsers(query string, limit int, decodedUsers []User) []User {
 	if query != "" {
-		result := make([]User, 0, limit)
+		result := make([]User, 0, limit-1)
 		for _, u := range decodedUsers {
-			if len(result) == limit {
-				fmt.Println("Limit reached!")
-				break
+			// because we increase limit in request
+			if len(result) == limit-1 {
+				return result
 			}
 
 			if strings.Contains(u.Name, query) || strings.Contains(u.About, query) {
 				result = append(result, u)
 			}
 		}
-
-		return result
 	}
 
 	return decodedUsers
@@ -283,21 +283,6 @@ func TestSearchClient_FindUsers_TooManyRedirects(t *testing.T) {
 	}
 }
 
-func TestSearchClient_FindUsers_BadOrderField(t *testing.T) {
-	request := SearchRequest{
-		OrderField: "Random",
-	}
-
-	_, err := testSearchClient.FindUsers(request)
-	if err != nil {
-		if err.Error() != fmt.Sprintf("OrderFeld %s invalid", request.OrderField) {
-			t.Fail()
-		}
-	} else {
-		t.Fail()
-	}
-}
-
 func TestSearchClient_FindUsers_BigOffset(t *testing.T) {
 	request := SearchRequest{
 		Offset:     100500,
@@ -307,6 +292,21 @@ func TestSearchClient_FindUsers_BigOffset(t *testing.T) {
 	_, err := testSearchClient.FindUsers(request)
 	if err != nil {
 		if err.Error() != "unknown bad request error: no items with this offset" {
+			t.Fail()
+		}
+	} else {
+		t.Fail()
+	}
+}
+
+func TestSearchClient_FindUsers_BadOrderField(t *testing.T) {
+	request := SearchRequest{
+		OrderField: "Random",
+	}
+
+	_, err := testSearchClient.FindUsers(request)
+	if err != nil {
+		if err.Error() != fmt.Sprintf("OrderFeld %s invalid", request.OrderField) {
 			t.Fail()
 		}
 	} else {
@@ -336,12 +336,15 @@ func TestSearchClient_FindUsers_Normal(t *testing.T) {
 	}
 
 	request := SearchRequest{
-		Limit:      10,
-		Offset:     0,
-		Query:      "ipsum",
+		Limit:      4,
+		Offset:     1,
+		Query:      "a",
 		OrderField: "Id",
 		OrderBy:    OrderByAsc,
 	}
 
-	_, _ = client.FindUsers(request)
+	_, err := client.FindUsers(request)
+	if err != nil {
+		t.Fail()
+	}
 }

@@ -92,7 +92,6 @@ func (srv *SearchClient) FindUsers(req SearchRequest) (*SearchResponse, error) {
 	searcherReq.Header.Add("AccessToken", srv.AccessToken)
 
 	resp, err := client.Do(searcherReq)
-	fmt.Println(resp, err)
 	if err != nil {
 		if err, ok := err.(net.Error); ok && err.Timeout() {
 			return nil, fmt.Errorf("timeout for %s", searcherParams.Encode())
