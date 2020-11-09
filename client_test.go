@@ -38,14 +38,18 @@ func SearchServer(w http.ResponseWriter, r *http.Request) {
 
 	q := r.URL.Query()
 
-	limit, err := strconv.Atoi(q.Get("limit"))
-	offset, err := strconv.Atoi(q.Get("offset"))
-	orderBy, err := strconv.Atoi(q.Get("order_by"))
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
+	offset, _ := strconv.Atoi(q.Get("offset"))
+	if offset >= 15 && offset <= 24 {
+		q.Set("offset", strconv.Itoa(offset+1))
+		r.URL.RawQuery = q.Encode()
+
+		fmt.Println(r.URL.RequestURI())
+		http.Redirect(w, r, r.URL.RequestURI(), http.StatusTemporaryRedirect)
 		return
 	}
 
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	orderBy, _ := strconv.Atoi(q.Get("order_by"))
 	query := q.Get("query")
 	orderField := q.Get("order_field")
 
@@ -55,7 +59,7 @@ func SearchServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	searchResult := searchUsers(query, decodedUsers)
+	searchResult := searchUsers(query, limit, decodedUsers)
 	statusCode := sortUsers(orderField, orderBy, searchResult)
 
 	if statusCode == http.StatusBadRequest {
@@ -72,7 +76,7 @@ func SearchServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	searchResult = searchResult[offset : offset+limit]
+	searchResult = searchResult[offset:]
 	resp, err := json.Marshal(searchResult)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -153,10 +157,15 @@ func isOrderAvailable(orderBy int) bool {
 	return false
 }
 
-func searchUsers(query string, decodedUsers []User) []User {
+func searchUsers(query string, limit int, decodedUsers []User) []User {
 	if query != "" {
-		result := make([]User, 0)
+		result := make([]User, 0, limit)
 		for _, u := range decodedUsers {
+			if len(result) == limit {
+				fmt.Println("Limit reached!")
+				break
+			}
+
 			if strings.Contains(u.Name, query) || strings.Contains(u.About, query) {
 				result = append(result, u)
 			}
@@ -252,6 +261,21 @@ func TestSearchClient_FindUsers_AccessDenied(t *testing.T) {
 	_, err := testSearchClient.FindUsers(SearchRequest{})
 	if err != nil {
 		if err.Error() != "Bad AccessToken" {
+			t.Fail()
+		}
+	} else {
+		t.Fail()
+	}
+}
+
+func TestSearchClient_FindUsers_TooManyRedirects(t *testing.T) {
+	request := SearchRequest{
+		Offset: 15,
+	}
+
+	_, err := testSearchClient.FindUsers(request)
+	if err != nil {
+		if !strings.Contains(err.Error(), "stopped after 10 redirects") {
 			t.Fail()
 		}
 	} else {
