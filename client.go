@@ -129,7 +129,7 @@ func (srv *SearchClient) FindUsers(req SearchRequest) (*SearchResponse, error) {
 		result.NextPage = true
 		result.Users = data[0 : len(data)-1]
 	} else {
-		result.Users = data[0:len(data)]
+		result.Users = data
 	}
 
 	return &result, err

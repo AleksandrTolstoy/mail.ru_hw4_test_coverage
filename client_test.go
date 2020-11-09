@@ -48,6 +48,13 @@ func SearchServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// special case actually i wouldn't do that in real project
+	// this error needs to be handled in the home work (2)
+	if offset == 25 {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
 	limit, _ := strconv.Atoi(q.Get("limit"))
 	orderBy, _ := strconv.Atoi(q.Get("order_by"))
 	query := q.Get("query")
@@ -56,13 +63,15 @@ func SearchServer(w http.ResponseWriter, r *http.Request) {
 	if !isOrderAvailable(orderBy) {
 		w.WriteHeader(http.StatusBadRequest)
 		// special case actually i wouldn't do that in real project
-		// this error needs to be handled in the home work (2)
+		// this error needs to be handled in the home work (3)
 		w.Write([]byte("Unknown order"))
 		return
 	}
 
 	searchResult := searchUsers(query, limit, decodedUsers)
 	if len(searchResult) == 0 {
+		// special case actually i wouldn't do that in real project
+		// this error needs to be handled in the home work (4)
 		w.Write([]byte("No users found!"))
 		return
 	}
@@ -327,7 +336,8 @@ func TestSearchClient_FindUsers_UnknownOrder(t *testing.T) {
 
 	_, err := testSearchClient.FindUsers(request)
 	if err != nil {
-		if err.Error() != "cant unpack error json: invalid character 'U' looking for beginning of value" {
+		fmt.Println(err.Error())
+		if !strings.Contains(err.Error(), "cant unpack error json: ") {
 			t.Fail()
 		}
 	} else {
@@ -372,6 +382,26 @@ func TestSearchClient_FindUsers_NoUsersFound(t *testing.T) {
 	_, err := client.FindUsers(request)
 	if err != nil {
 		if !strings.Contains(err.Error(), "cant unpack result json: ") {
+			t.Fail()
+		}
+	} else {
+		t.Fail()
+	}
+}
+
+func TestSearchClient_FindUsers_ISE(t *testing.T) {
+	client := SearchClient{
+		AccessToken: "access allowed",
+		URL:         testServer.URL,
+	}
+
+	request := SearchRequest{
+		Offset: 25,
+	}
+
+	_, err := client.FindUsers(request)
+	if err != nil {
+		if err.Error() != "SearchServer fatal error" {
 			t.Fail()
 		}
 	} else {
