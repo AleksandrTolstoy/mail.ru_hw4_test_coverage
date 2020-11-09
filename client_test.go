@@ -62,6 +62,11 @@ func SearchServer(w http.ResponseWriter, r *http.Request) {
 	}
 
 	searchResult := searchUsers(query, limit, decodedUsers)
+	if len(searchResult) == 0 {
+		w.Write([]byte("No users found!"))
+		return
+	}
+
 	statusCode := sortUsers(orderField, orderBy, searchResult)
 
 	if statusCode == http.StatusBadRequest {
@@ -164,13 +169,15 @@ func searchUsers(query string, limit int, decodedUsers []User) []User {
 		result := make([]User, 0, limit)
 		for _, u := range decodedUsers {
 			if len(result) == limit {
-				return result
+				break
 			}
 
 			if strings.Contains(u.Name, query) || strings.Contains(u.About, query) {
 				result = append(result, u)
 			}
 		}
+
+		return result
 	}
 
 	return decodedUsers
@@ -344,6 +351,30 @@ func TestSearchClient_FindUsers_BigLimit(t *testing.T) {
 
 	_, err := client.FindUsers(request)
 	if err != nil {
+		t.Fail()
+	}
+}
+
+func TestSearchClient_FindUsers_NoUsersFound(t *testing.T) {
+	client := SearchClient{
+		AccessToken: "access allowed",
+		URL:         testServer.URL,
+	}
+
+	request := SearchRequest{
+		Limit:      5,
+		Offset:     2,
+		Query:      "I'm the best man in the world", // haha
+		OrderField: "Id",
+		OrderBy:    OrderByAsc,
+	}
+
+	_, err := client.FindUsers(request)
+	if err != nil {
+		if !strings.Contains(err.Error(), "cant unpack result json: ") {
+			t.Fail()
+		}
+	} else {
 		t.Fail()
 	}
 }
