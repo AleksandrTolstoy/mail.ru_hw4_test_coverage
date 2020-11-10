@@ -15,13 +15,7 @@ import (
 	"testing"
 )
 
-var (
-	testServer       = httptest.NewServer(http.HandlerFunc(SearchServer))
-	testSearchClient = SearchClient{
-		AccessToken: "access allowed",
-		URL:         testServer.URL,
-	}
-)
+var testServer = httptest.NewServer(http.HandlerFunc(SearchServer))
 
 func SearchServer(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("AccessToken") != "access allowed" {
@@ -39,8 +33,8 @@ func SearchServer(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 
 	offset, _ := strconv.Atoi(q.Get("offset"))
-	// special case actually i wouldn't do that in real project
-	// this error needs to be handled in the home work (1)
+	// Special case. Actually i wouldn't do that in real project
+	// This error needs to be handled in the home work (1)
 	if offset >= 15 && offset <= 24 {
 		q.Set("offset", strconv.Itoa(offset+1))
 		r.URL.RawQuery = q.Encode()
@@ -48,10 +42,17 @@ func SearchServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// special case actually i wouldn't do that in real project
-	// this error needs to be handled in the home work (2)
+	// Special case. Actually i wouldn't do that in real project
+	// This error needs to be handled in the home work (2)
 	if offset == 25 {
 		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	// Special case. Actually i wouldn't do that in real project
+	// This error needs to be handled in the home work (3)
+	if offset == 26 {
+		<-r.Context().Done()
 		return
 	}
 
@@ -62,16 +63,16 @@ func SearchServer(w http.ResponseWriter, r *http.Request) {
 
 	if !isOrderAvailable(orderBy) {
 		w.WriteHeader(http.StatusBadRequest)
-		// special case actually i wouldn't do that in real project
-		// this error needs to be handled in the home work (3)
+		// Special case. Actually i wouldn't do that in real project
+		// This error needs to be handled in the home work (4)
 		w.Write([]byte("Unknown order"))
 		return
 	}
 
 	searchResult := searchUsers(query, limit, decodedUsers)
 	if len(searchResult) == 0 {
-		// special case actually i wouldn't do that in real project
-		// this error needs to be handled in the home work (4)
+		// Special case. Actually i wouldn't do that in real project
+		// This error needs to be handled in the home work (5)
 		w.Write([]byte("No users found!"))
 		return
 	}
@@ -238,11 +239,16 @@ func sortUsers(orderField string, orderBy int, users []User) (statusCode int) {
 }
 
 func TestSearchClient_FindUsers_NegativeLimit(t *testing.T) {
+	client := SearchClient{
+		AccessToken: "access allowed",
+		URL:         testServer.URL,
+	}
+
 	request := SearchRequest{
 		Limit: -1,
 	}
 
-	_, err := testSearchClient.FindUsers(request)
+	_, err := client.FindUsers(request)
 	if err != nil {
 		if err.Error() != "limit must be > 0" {
 			t.Fail()
@@ -253,11 +259,16 @@ func TestSearchClient_FindUsers_NegativeLimit(t *testing.T) {
 }
 
 func TestSearchClient_FindUsers_NegativeOffset(t *testing.T) {
+	client := SearchClient{
+		AccessToken: "access allowed",
+		URL:         testServer.URL,
+	}
+
 	request := SearchRequest{
 		Offset: -1,
 	}
 
-	_, err := testSearchClient.FindUsers(request)
+	_, err := client.FindUsers(request)
 	if err != nil {
 		if err.Error() != "offset must be > 0" {
 			t.Fail()
@@ -269,7 +280,7 @@ func TestSearchClient_FindUsers_NegativeOffset(t *testing.T) {
 
 func TestSearchClient_FindUsers_AccessDenied(t *testing.T) {
 	testSearchClient := SearchClient{
-		AccessToken: "access denied",
+		AccessToken: "access denied", // note !
 		URL:         testServer.URL,
 	}
 
@@ -284,11 +295,16 @@ func TestSearchClient_FindUsers_AccessDenied(t *testing.T) {
 }
 
 func TestSearchClient_FindUsers_TooManyRedirects(t *testing.T) {
+	client := SearchClient{
+		AccessToken: "access allowed",
+		URL:         testServer.URL,
+	}
+
 	request := SearchRequest{
 		Offset: 15,
 	}
 
-	_, err := testSearchClient.FindUsers(request)
+	_, err := client.FindUsers(request)
 	if err != nil {
 		if !strings.Contains(err.Error(), "stopped after 10 redirects") {
 			t.Fail()
@@ -299,14 +315,19 @@ func TestSearchClient_FindUsers_TooManyRedirects(t *testing.T) {
 }
 
 func TestSearchClient_FindUsers_BigOffset(t *testing.T) {
+	client := SearchClient{
+		AccessToken: "access allowed",
+		URL:         testServer.URL,
+	}
+
 	request := SearchRequest{
 		Offset:     100500,
 		OrderField: "Id",
 	}
 
-	_, err := testSearchClient.FindUsers(request)
+	_, err := client.FindUsers(request)
 	if err != nil {
-		if err.Error() != "unknown bad request error: no items with this offset" {
+		if !strings.Contains(err.Error(), "unknown bad request error: ") {
 			t.Fail()
 		}
 	} else {
@@ -315,11 +336,16 @@ func TestSearchClient_FindUsers_BigOffset(t *testing.T) {
 }
 
 func TestSearchClient_FindUsers_BadOrderField(t *testing.T) {
+	client := SearchClient{
+		AccessToken: "access allowed",
+		URL:         testServer.URL,
+	}
+
 	request := SearchRequest{
 		OrderField: "Random",
 	}
 
-	_, err := testSearchClient.FindUsers(request)
+	_, err := client.FindUsers(request)
 	if err != nil {
 		if err.Error() != fmt.Sprintf("OrderFeld %s invalid", request.OrderField) {
 			t.Fail()
@@ -330,13 +356,17 @@ func TestSearchClient_FindUsers_BadOrderField(t *testing.T) {
 }
 
 func TestSearchClient_FindUsers_UnknownOrder(t *testing.T) {
+	client := SearchClient{
+		AccessToken: "access allowed",
+		URL:         testServer.URL,
+	}
+
 	request := SearchRequest{
 		OrderBy: 100500,
 	}
 
-	_, err := testSearchClient.FindUsers(request)
+	_, err := client.FindUsers(request)
 	if err != nil {
-		fmt.Println(err.Error())
 		if !strings.Contains(err.Error(), "cant unpack error json: ") {
 			t.Fail()
 		}
@@ -402,6 +432,26 @@ func TestSearchClient_FindUsers_ISE(t *testing.T) {
 	_, err := client.FindUsers(request)
 	if err != nil {
 		if err.Error() != "SearchServer fatal error" {
+			t.Fail()
+		}
+	} else {
+		t.Fail()
+	}
+}
+
+func TestSearchClient_FindUsers_Timeout(t *testing.T) {
+	client := SearchClient{
+		AccessToken: "access allowed",
+		URL:         testServer.URL,
+	}
+
+	request := SearchRequest{
+		Offset: 26,
+	}
+
+	_, err := client.FindUsers(request)
+	if err != nil {
+		if !strings.Contains(err.Error(), "timeout for ") {
 			t.Fail()
 		}
 	} else {
